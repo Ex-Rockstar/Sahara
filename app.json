@@ -21,7 +21,8 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.exrockstar.sahara"
     },
     "web": {
       "favicon": "./assets/images/favicon.png"
@@ -30,6 +31,15 @@
     "plugins": [
       "expo-router",
       "expo-secure-store"
-    ]
+    ],
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "dcbb9954-ecca-4c04-80f7-4ee03dfd81f9"
+      }
+    },
+    "owner": "ex-rockstar"
   }
 }
