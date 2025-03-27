@@ -13,14 +13,19 @@ export default function BottomNavBar() {
     <View style={styles.container}>
       <TouchableOpacity
         style={styles.navItem}
-        onPress={() => router.push('/')}
+        onPress={() => router.push('/home')}
       >
         <Ionicons
-          name={isActive('/') ? 'home' : 'home-outline'}
+          name={isActive('/home') ? 'home' : 'home-outline'}
           size={24}
-          color={isActive('/') ? '#4A90E2' : '#666'}
+          color={isActive('/home') ? '#4A90E2' : '#666'}
         />
-        <Text style={[styles.navText, isActive('/') && styles.activeText]}>
+        <Text
+          style={[
+            styles.navText,
+            isActive('/home') && styles.activeText,
+          ]}
+        >
           Home
         </Text>
       </TouchableOpacity>
@@ -34,7 +39,12 @@ export default function BottomNavBar() {
           size={24}
           color={isActive('/journal') ? '#4A90E2' : '#666'}
         />
-        <Text style={[styles.navText, isActive('/journal') && styles.activeText]}>
+        <Text
+          style={[
+            styles.navText,
+            isActive('/journal') && styles.activeText,
+          ]}
+        >
           Journal
         </Text>
       </TouchableOpacity>
@@ -48,8 +58,32 @@ export default function BottomNavBar() {
           size={24}
           color={isActive('/quick-therapy') ? '#4A90E2' : '#666'}
         />
-        <Text style={[styles.navText, isActive('/quick-therapy') && styles.activeText]}>
+        <Text
+          style={[
+            styles.navText,
+            isActive('/quick-therapy') && styles.activeText,
+          ]}
+        >
           Quick Therapy
+        </Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.navItem}
+        onPress={() => router.push('/chat')}
+      >
+        <Ionicons
+          name={isActive('/chat') ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline'}
+          size={24}
+          color={isActive('/chat') ? '#4A90E2' : '#666'}
+        />
+        <Text
+          style={[
+            styles.navText,
+            isActive('/chat') && styles.activeText,
+          ]}
+        >
+          AI Chat
         </Text>
       </TouchableOpacity>
 
@@ -62,7 +96,12 @@ export default function BottomNavBar() {
           size={24}
           color={isActive('/games') ? '#4A90E2' : '#666'}
         />
-        <Text style={[styles.navText, isActive('/games') && styles.activeText]}>
+        <Text
+          style={[
+            styles.navText,
+            isActive('/games') && styles.activeText,
+          ]}
+        >
           Games
         </Text>
       </TouchableOpacity>
@@ -76,7 +115,12 @@ export default function BottomNavBar() {
           size={24}
           color={isActive('/emergency') ? '#FF6B6B' : '#666'}
         />
-        <Text style={[styles.navText, isActive('/emergency') && styles.emergencyText]}>
+        <Text
+          style={[
+            styles.navText,
+            isActive('/emergency') && styles.emergencyText,
+          ]}
+        >
           Emergency
         </Text>
       </TouchableOpacity>
@@ -90,18 +134,21 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     alignItems: 'center',
     backgroundColor: '#FFF',
-    paddingVertical: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
     borderTopWidth: 1,
-    borderTopColor: '#E29578',
+    borderTopColor: '#E5E5E5',
+    height: 60,
   },
   navItem: {
     alignItems: 'center',
+    paddingHorizontal: 8,
   },
   navText: {
     fontSize: 12,
-    fontFamily: 'Poppins',
-    color: '#666',
     marginTop: 4,
+    color: '#666',
+    fontFamily: 'Poppins',
   },
   activeText: {
     color: '#4A90E2',

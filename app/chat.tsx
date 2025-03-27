@@ -1,17 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  SafeAreaView,
   FlatList,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import BottomNavBar from '../components/BottomNavBar';
+import axios from 'axios';
 
 interface Message {
   id: string;
@@ -20,37 +22,84 @@ interface Message {
   timestamp: Date;
 }
 
-const ChatScreen = () => {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      text: 'Hello! I\'m your AI companion. How can I help you today?',
-      isUser: false,
-      timestamp: new Date(),
-    },
-  ]);
-  const [inputText, setInputText] = useState('');
+const API_URL = 'http://192.168.1.6:8000/chat';
 
-  const handleSend = () => {
-    if (inputText.trim()) {
-      const newMessage: Message = {
-        id: Date.now().toString(),
-        text: inputText.trim(),
-        isUser: true,
+export default function ChatScreen() {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [inputText, setInputText] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    setMessages([
+      {
+        id: '1',
+        text: 'Hello! I\'m your AI companion. How can I help you today?',
+        isUser: false,
+        timestamp: new Date(),
+      },
+    ]);
+  }, []);
+
+  const handleSend = async () => {
+    if (!inputText.trim()) return;
+
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      text: inputText.trim(),
+      isUser: true,
+      timestamp: new Date(),
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setInputText('');
+    setIsLoading(true);
+
+    try {
+      console.log('Sending message to:', API_URL);
+      const response = await axios.post(API_URL, 
+        {
+          message: userMessage.text
+        }, 
+        {
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      console.log('Response received:', response.data);
+
+      const aiMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: response.data.response || 'Sorry, I could not process your request.',
+        isUser: false,
         timestamp: new Date(),
       };
-      setMessages((prev) => [...prev, newMessage]);
-      setInputText('');
-      // Simulate AI response
-      setTimeout(() => {
-        const aiResponse: Message = {
-          id: (Date.now() + 1).toString(),
-          text: 'I understand. Would you like to talk more about that?',
-          isUser: false,
-          timestamp: new Date(),
-        };
-        setMessages((prev) => [...prev, aiResponse]);
-      }, 1000);
+
+      setMessages(prev => [...prev, aiMessage]);
+    } catch (error) {
+      console.error('Error sending message:', error);
+      let errorMessage = 'Sorry, I encountered an error. Please try again.';
+      
+      if (axios.isAxiosError(error)) {
+        if (error.code === 'ECONNABORTED') {
+          errorMessage = 'Request timed out. Please check your connection.';
+        } else if (error.code === 'ECONNREFUSED') {
+          errorMessage = 'Could not connect to the server. Please check if the server is running.';
+        } else if (error.response) {
+          errorMessage = `Server error: ${error.response.status}`;
+        }
+      }
+
+      const errorResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        text: errorMessage,
+        isUser: false,
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, errorResponse]);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -67,8 +116,16 @@ const ChatScreen = () => {
           item.isUser ? styles.userBubble : styles.aiBubble,
         ]}
       >
-        <Text style={styles.messageText}>{item.text}</Text>
-        <Text style={styles.timestamp}>
+        <Text style={[
+          styles.messageText,
+          item.isUser ? styles.userMessageText : styles.aiMessageText
+        ]}>
+          {item.text}
+        </Text>
+        <Text style={[
+          styles.timestamp,
+          item.isUser ? styles.userTimestamp : styles.aiTimestamp
+        ]}>
           {item.timestamp.toLocaleTimeString([], {
             hour: '2-digit',
             minute: '2-digit',
@@ -79,17 +136,26 @@ const ChatScreen = () => {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <LinearGradient
+      colors={['#F5F5F5', '#FFFFFF']}
+      style={styles.container}
+    >
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardAvoidingView}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.keyboardView}
       >
         <FlatList
           data={messages}
           renderItem={renderMessage}
-          keyExtractor={(item) => item.id}
+          keyExtractor={item => item.id}
           contentContainerStyle={styles.messagesList}
+          inverted={false}
         />
+        {isLoading && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="small" color="#4A90E2" />
+          </View>
+        )}
         <View style={styles.inputContainer}>
           <TextInput
             style={styles.input}
@@ -107,83 +173,34 @@ const ChatScreen = () => {
             <Ionicons
               name="send"
               size={24}
-              color={inputText.trim() ? '#FF6B6B' : '#999'}
+              color={inputText.trim() ? '#4A90E2' : '#999'}
             />
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
-      <BottomNavBar />
-    </SafeAreaView>
+    </LinearGradient>
   );
-};
+}
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F5F5F5',
-  },
-  keyboardAvoidingView: {
-    flex: 1,
-  },
-  messagesList: {
-    padding: 16,
-    paddingBottom: 80,
-  },
-  messageContainer: {
-    marginBottom: 16,
-    maxWidth: '80%',
-  },
-  userMessage: {
-    alignSelf: 'flex-end',
-  },
-  aiMessage: {
-    alignSelf: 'flex-start',
-  },
-  messageBubble: {
-    padding: 12,
-    borderRadius: 20,
-  },
-  userBubble: {
-    backgroundColor: '#FF6B6B',
-  },
-  aiBubble: {
-    backgroundColor: '#FFF',
-  },
-  messageText: {
-    fontSize: 16,
-    color: '#333',
-  },
-  timestamp: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 4,
-    alignSelf: 'flex-end',
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    padding: 16,
-    backgroundColor: '#FFF',
-    borderTopWidth: 1,
-    borderTopColor: '#EEE',
-  },
-  input: {
-    flex: 1,
-    backgroundColor: '#F5F5F5',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginRight: 8,
-    maxHeight: 100,
-    fontSize: 16,
-  },
-  sendButton: {
-    padding: 8,
-    borderRadius: 20,
-  },
-  sendButtonDisabled: {
-    opacity: 0.5,
-  },
+  container: { flex: 1 },
+  keyboardView: { flex: 1 },
+  messagesList: { padding: 16, paddingBottom: 80 },
+  messageContainer: { marginBottom: 16, maxWidth: '80%' },
+  userMessage: { alignSelf: 'flex-end' },
+  aiMessage: { alignSelf: 'flex-start' },
+  messageBubble: { padding: 12, borderRadius: 20 },
+  userBubble: { backgroundColor: '#4A90E2' },
+  aiBubble: { backgroundColor: '#F5F5F5' },
+  messageText: { fontSize: 16, fontFamily: 'Poppins' },
+  userMessageText: { color: '#FFFFFF' },
+  aiMessageText: { color: '#333333' },
+  timestamp: { fontSize: 12, marginTop: 4, alignSelf: 'flex-end' },
+  userTimestamp: { color: '#FFFFFF' },
+  aiTimestamp: { color: '#666666' },
+  inputContainer: { flexDirection: 'row', alignItems: 'flex-end', padding: 16, backgroundColor: '#FFF', borderTopWidth: 1, borderTopColor: '#E5E5E5' },
+  input: { flex: 1, backgroundColor: '#F5F5F5', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, fontSize: 16, fontFamily: 'Poppins', color: '#333' },
+  sendButton: { padding: 8, borderRadius: 20, backgroundColor: '#F5F5F5' },
+  sendButtonDisabled: { opacity: 0.5 },
+  loadingContainer: { padding: 8, alignItems: 'center' },
 });
-
-export default ChatScreen; 
