@@ -8,6 +8,7 @@ import {
   ScrollView,
   Modal,
   Animated,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Calendar } from 'react-native-calendars';
@@ -16,6 +17,8 @@ import { PomodoroTimer } from '../components/PomodoroTimer';
 import BottomNavBar from '../components/BottomNavBar';
 import { LinearGradient } from 'expo-linear-gradient';
 import FakeCall from '../components/FakeCall';
+import { useRouter } from 'expo-router';
+import { saveJournalEntry, getMoodStatistics, JournalEntry } from '../utils/journalDb';
 
 interface MoodEntry {
   date: string;
@@ -30,14 +33,47 @@ interface PositiveThought {
 }
 
 const MOODS = [
-  { emoji: '😄', value: 'very_happy' },
-  { emoji: '🙂', value: 'happy' },
-  { emoji: '😐', value: 'neutral' },
-  { emoji: '😕', value: 'sad' },
-  { emoji: '😢', value: 'very_sad' },
+  { emoji: '😄', value: 'very_happy', score: 5 },
+  { emoji: '🙂', value: 'happy', score: 4 },
+  { emoji: '😐', value: 'neutral', score: 3 },
+  { emoji: '😕', value: 'sad', score: 2 },
+  { emoji: '😢', value: 'very_sad', score: 1 },
 ];
 
+const MOOD_PROMPTS = {
+  very_happy: [
+    "What made today especially great?",
+    "How can you make tomorrow just as wonderful?",
+    "Who would you like to share this happiness with?"
+  ],
+  happy: [
+    "What positive things happened today?",
+    "What are you grateful for right now?",
+    "How can you spread this happiness to others?"
+  ],
+  neutral: [
+    "What could make your day better?",
+    "Is there something specific on your mind?",
+    "What's one small positive change you could make?"
+  ],
+  sad: [
+    "What's troubling you today?",
+    "Is there someone you could talk to about this?",
+    "What usually helps you feel better?"
+  ],
+  very_sad: [
+    "Would you like to talk about what's bothering you?",
+    "Have you experienced this feeling before? What helped then?",
+    "What's one tiny step you could take to feel better?"
+  ]
+};
+
+type StyleProps = {
+  [key: string]: any;
+};
+
 export default function HomeScreen() {
+  const router = useRouter();
   const [selectedMood, setSelectedMood] = useState<string | null>(null);
   const [showMoodCalendar, setShowMoodCalendar] = useState(false);
   const [moodHistory, setMoodHistory] = useState<MoodEntry[]>([]);
@@ -45,10 +81,15 @@ export default function HomeScreen() {
   const [showPositivityPot, setShowPositivityPot] = useState(false);
   const [positiveThoughts, setPositiveThoughts] = useState<PositiveThought[]>([]);
   const [showFakeCall, setShowFakeCall] = useState(false);
+  const [showMoodPrompts, setShowMoodPrompts] = useState(false);
+  const [currentPrompts, setCurrentPrompts] = useState<string[]>([]);
+  const [promptResponses, setPromptResponses] = useState<{[key: string]: string}>({});
+  const [moodStats, setMoodStats] = useState<{dates: string[], scores: number[]}>({ dates: [], scores: [] });
 
   useEffect(() => {
     loadMoodHistory();
     loadPositiveThoughts();
+    loadMoodStatistics();
   }, []);
 
   const loadMoodHistory = async () => {
@@ -61,15 +102,26 @@ export default function HomeScreen() {
     setPositiveThoughts(thoughts);
   };
 
+  const loadMoodStatistics = async () => {
+    const endDate = new Date().toISOString().split('T')[0];
+    const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const stats = await getMoodStatistics(startDate, endDate);
+    
+    const dates = stats.map(s => s.date);
+    const scores = stats.map(s => {
+      const mood = MOODS.find(m => m.value === s.mood);
+      return mood ? mood.score : 3;
+    });
+
+    setMoodStats({ dates, scores });
+  };
+
   const handleMoodSelect = async (mood: string) => {
     setSelectedMood(mood);
-    const entry = {
-      date: new Date().toISOString().split('T')[0],
-      mood,
-      timestamp: Date.now(),
-    };
-    await saveMoodRating(entry);
-    await loadMoodHistory();
+    const prompts = MOOD_PROMPTS[mood as keyof typeof MOOD_PROMPTS];
+    setCurrentPrompts(prompts);
+    setPromptResponses({});
+    setShowMoodPrompts(true);
   };
 
   const handleSavePositiveThought = async () => {
@@ -86,9 +138,32 @@ export default function HomeScreen() {
     await loadPositiveThoughts();
   };
 
+  const handleSaveMoodEntry = async () => {
+    if (!selectedMood) return;
+
+    const entry: JournalEntry = {
+      id: Date.now().toString(),
+      date: new Date().toISOString().split('T')[0],
+      content: '',
+      mood: selectedMood,
+      moodNote: '',
+      promptResponses: Object.entries(promptResponses).map(([question, answer]: [string, string]) => ({
+        question,
+        answer
+      })),
+      tags: []
+    };
+
+    await saveJournalEntry(entry);
+    setShowMoodPrompts(false);
+    setSelectedMood(null);
+    setPromptResponses({});
+    await loadMoodStatistics();
+  };
+
   const getMoodCalendarMarkers = () => {
     const markers: any = {};
-    moodHistory.forEach((entry) => {
+    moodHistory.forEach((entry: MoodEntry) => {
       markers[entry.date] = {
         marked: true,
         dotColor: '#E29578',
@@ -108,6 +183,42 @@ export default function HomeScreen() {
       };
     });
     return markers;
+  };
+
+  const renderMoodVisualization = () => {
+    if (moodStats.dates.length === 0) return null;
+
+    const lastSevenDays = moodStats.scores.slice(-7);
+    const maxHeight = 150;
+
+    return (
+      <View style={styles.chartContainer}>
+        <Text style={styles.chartTitle}>Your Mood Trend (Last 7 Days)</Text>
+        <View style={styles.moodGraph}>
+          {lastSevenDays.map((score: number, index: number) => (
+            <View key={index} style={styles.moodColumn}>
+              <View 
+                style={[
+                  styles.moodBar, 
+                  { 
+                    height: (score / 5) * maxHeight,
+                    backgroundColor: score >= 4 ? '#83C5BE' : 
+                                   score >= 3 ? '#E29578' : 
+                                   '#EE6C4D'
+                  }
+                ]} 
+              />
+              <Text style={styles.dateLabel}>
+                {moodStats.dates[moodStats.dates.length - 7 + index]?.split('-')[2] || ''}
+              </Text>
+              <Text style={styles.moodEmojiSmall}>
+                {MOODS.find(m => m.score === score)?.emoji || ''}
+              </Text>
+            </View>
+          ))}
+        </View>
+      </View>
+    );
   };
 
   return (
@@ -173,7 +284,51 @@ export default function HomeScreen() {
             <PomodoroTimer />
           </View>
 
-          {/* Mood Calendar Modal */}
+          {/* Mood Prompts Modal */}
+          <Modal
+            visible={showMoodPrompts}
+            animationType="slide"
+            transparent={true}
+          >
+            <View style={styles.modalContainer}>
+              <View style={styles.modalContent}>
+                <TouchableOpacity
+                  style={styles.closeButton}
+                  onPress={() => setShowMoodPrompts(false)}
+                >
+                  <Ionicons name="close" size={24} color="#3E3E3E" />
+                </TouchableOpacity>
+                <Text style={styles.modalTitle}>Let's Reflect</Text>
+                <ScrollView style={styles.promptsContainer}>
+                  {currentPrompts.map((prompt: string, index: number) => (
+                    <View key={index} style={styles.promptItem}>
+                      <Text style={styles.promptQuestion}>{prompt}</Text>
+                      <TextInput
+                        style={styles.promptInput}
+                        multiline
+                        placeholder="Type your response..."
+                        value={promptResponses[prompt] || ''}
+                        onChangeText={(text: string) => {
+                          setPromptResponses({
+                            ...promptResponses,
+                            [prompt]: text
+                          });
+                        }}
+                      />
+                    </View>
+                  ))}
+                  <TouchableOpacity
+                    style={styles.saveButton}
+                    onPress={handleSaveMoodEntry}
+                  >
+                    <Text style={styles.buttonText}>Save Reflection</Text>
+                  </TouchableOpacity>
+                </ScrollView>
+              </View>
+            </View>
+          </Modal>
+
+          {/* Mood Analysis Modal */}
           <Modal
             visible={showMoodCalendar}
             animationType="slide"
@@ -188,6 +343,9 @@ export default function HomeScreen() {
                   <Ionicons name="close" size={24} color="#3E3E3E" />
                 </TouchableOpacity>
                 <Text style={styles.modalTitle}>Your Mood History</Text>
+                
+                {renderMoodVisualization()}
+
                 <Calendar
                   markedDates={getMoodCalendarMarkers()}
                   markingType="custom"
@@ -224,7 +382,7 @@ export default function HomeScreen() {
                 </TouchableOpacity>
                 <Text style={styles.modalTitle}>Your Positivity Pot</Text>
                 <ScrollView style={styles.thoughtsList}>
-                  {positiveThoughts.map((thought) => (
+                  {positiveThoughts.map(thought => (
                     <View key={thought.id} style={styles.thoughtItem}>
                       <Text style={styles.thoughtDate}>
                         {new Date(thought.date).toLocaleDateString()}
@@ -239,22 +397,26 @@ export default function HomeScreen() {
         </ScrollView>
       </LinearGradient>
 
-      {/* Floating fake call button */}
-      <TouchableOpacity
-        style={styles.fakeCallButton}
-        onPress={() => setShowFakeCall(true)}
-      >
-        <Ionicons name="call" size={24} color="#fff" />
-        <Text style={styles.fakeCallText}>Fake Call</Text>
-      </TouchableOpacity>
+      {/* Fake Call Controls */}
+      <View style={styles.fakeCallControls}>
+        <TouchableOpacity
+          style={styles.fakeCallButton}
+          onPress={() => setShowFakeCall(true)}
+        >
+          <Ionicons name="call" size={24} color="#fff" />
+          <Text style={styles.fakeCallText}>Fake Call</Text>
+        </TouchableOpacity>
 
-      {/* Fake Call Modal */}
+        <TouchableOpacity
+          style={styles.settingsButton}
+          onPress={() => router.push('/call-settings')}
+        >
+          <Ionicons name="settings" size={24} color="#fff" />
+        </TouchableOpacity>
+      </View>
+
       {showFakeCall && (
-        <FakeCall
-          onClose={() => setShowFakeCall(false)}
-          callerName="Emergency Contact"
-          callerNumber="+1 (555) 123-4567"
-        />
+        <FakeCall onClose={() => setShowFakeCall(false)} />
       )}
 
       <BottomNavBar />
@@ -418,10 +580,16 @@ const styles = StyleSheet.create({
     fontFamily: 'Lora',
     color: '#3E3E3E',
   },
-  fakeCallButton: {
+  fakeCallControls: {
     position: 'absolute',
     right: 20,
-    bottom: 100, // Position above bottom navigation bar
+    bottom: 100,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    zIndex: 1000,
+  },
+  fakeCallButton: {
     backgroundColor: '#E29578',
     flexDirection: 'row',
     alignItems: 'center',
@@ -433,7 +601,16 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 5,
-    zIndex: 1000,
+  },
+  settingsButton: {
+    backgroundColor: '#6D597A',
+    padding: 12,
+    borderRadius: 30,
+    shadowColor: '#3E3E3E',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
   },
   fakeCallText: {
     color: '#fff',
@@ -442,4 +619,70 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: 8,
   },
-}); 
+  promptsContainer: {
+    maxHeight: '80%',
+  },
+  promptItem: {
+    marginBottom: 16,
+  },
+  promptQuestion: {
+    fontSize: 16,
+    fontFamily: 'Poppins',
+    color: '#3E3E3E',
+    marginBottom: 8,
+  },
+  promptInput: {
+    borderWidth: 1,
+    borderColor: '#E29578',
+    borderRadius: 12,
+    padding: 12,
+    minHeight: 80,
+    fontSize: 16,
+    fontFamily: 'Lora',
+    color: '#3E3E3E',
+    backgroundColor: '#fff',
+  },
+  chartContainer: {
+    marginVertical: 16,
+    padding: 16,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    shadowColor: '#3E3E3E',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  chartTitle: {
+    fontSize: 16,
+    fontFamily: 'Poppins',
+    color: '#3E3E3E',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  moodGraph: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    height: 200,
+    paddingHorizontal: 8,
+  },
+  moodColumn: {
+    alignItems: 'center',
+    width: 32,
+  },
+  moodBar: {
+    width: 24,
+    borderRadius: 12,
+    backgroundColor: '#E29578',
+  },
+  dateLabel: {
+    fontSize: 12,
+    color: '#3E3E3E',
+    marginTop: 4,
+  },
+  moodEmojiSmall: {
+    fontSize: 16,
+    marginTop: 2,
+  },
+}) as StyleProps; 

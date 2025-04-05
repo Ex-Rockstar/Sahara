@@ -8,41 +8,52 @@ import {
   Dimensions,
   Modal,
   StatusBar,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width, height } = Dimensions.get('window');
 
-interface FakeCallProps {
-  onClose: () => void;
-  callerName: string;
-  callerNumber: string;
+interface CallContact {
+  id: string;
+  name: string;
+  number: string;
+  type: 'home' | 'office';
 }
 
-const FakeCall: React.FC<FakeCallProps> = ({ onClose, callerName, callerNumber }) => {
+interface FakeCallProps {
+  onClose: () => void;
+}
+
+const FakeCall: React.FC<FakeCallProps> = ({ onClose }) => {
   const [isCallActive, setIsCallActive] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const [contacts, setContacts] = useState<CallContact[]>([]);
+  const [selectedContact, setSelectedContact] = useState<CallContact | null>(null);
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // Start playing ringtone immediately when component mounts
-    playCallSound();
-    
+    loadContacts();
     Animated.timing(fadeAnim, {
       toValue: 1,
       duration: 300,
       useNativeDriver: true,
     }).start();
-
-    return () => {
-      // Cleanup sound when component unmounts
-      if (sound) {
-        sound.unloadAsync();
-      }
-    };
   }, []);
+
+  const loadContacts = async () => {
+    try {
+      const savedContacts = await AsyncStorage.getItem('fakeCallContacts');
+      if (savedContacts) {
+        setContacts(JSON.parse(savedContacts));
+      }
+    } catch (error) {
+      console.error('Error loading contacts:', error);
+    }
+  };
 
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -83,15 +94,21 @@ const FakeCall: React.FC<FakeCallProps> = ({ onClose, callerName, callerNumber }
     }
   };
 
+  const handleContactSelect = (contact: CallContact) => {
+    setSelectedContact(contact);
+    playCallSound();
+  };
+
   const handleAnswer = async () => {
     setIsCallActive(true);
-    await stopCallSound(); // Stop ringtone when call is answered
+    await stopCallSound();
   };
 
   const handleEndCall = async () => {
     setIsCallActive(false);
     setCallDuration(0);
-    await stopCallSound(); // Stop ringtone when call is ended
+    setSelectedContact(null);
+    await stopCallSound();
     Animated.timing(fadeAnim, {
       toValue: 0,
       duration: 300,
@@ -123,32 +140,52 @@ const FakeCall: React.FC<FakeCallProps> = ({ onClose, callerName, callerNumber }
           }
         ]}
       >
-        <View style={styles.content}>
-          <View style={styles.header}>
-            <Text style={styles.callerName}>{callerName}</Text>
-            <Text style={styles.phoneNumber}>{callerNumber}</Text>
-            {isCallActive && (
-              <Text style={styles.timer}>{formatTime(callDuration)}</Text>
-            )}
-          </View>
-
-          <View style={styles.controls}>
-            <TouchableOpacity
-              style={[styles.button, styles.endButton]}
-              onPress={handleEndCall}
-            >
-              <Ionicons name="call" size={30} color="#fff" />
-            </TouchableOpacity>
-            {!isCallActive && (
+        {!selectedContact ? (
+          <ScrollView style={styles.contactsContainer}>
+            <Text style={styles.title}>Select a Contact</Text>
+            {contacts.map((contact) => (
               <TouchableOpacity
-                style={[styles.button, styles.answerButton]}
-                onPress={handleAnswer}
+                key={contact.id}
+                style={styles.contactButton}
+                onPress={() => handleContactSelect(contact)}
               >
-                <Ionicons name="call" size={30} color="#fff" />
+                <View style={styles.contactInfo}>
+                  <Text style={styles.contactName}>{contact.name}</Text>
+                  <Text style={styles.contactNumber}>{contact.number}</Text>
+                  <Text style={styles.contactType}>{contact.type}</Text>
+                </View>
+                <Ionicons name="call" size={24} color="#4CAF50" />
               </TouchableOpacity>
-            )}
+            ))}
+          </ScrollView>
+        ) : (
+          <View style={styles.callScreen}>
+            <View style={styles.header}>
+              <Text style={styles.callerName}>{selectedContact.name}</Text>
+              <Text style={styles.phoneNumber}>{selectedContact.number}</Text>
+              {isCallActive && (
+                <Text style={styles.timer}>{formatTime(callDuration)}</Text>
+              )}
+            </View>
+
+            <View style={styles.controls}>
+              <TouchableOpacity
+                style={[styles.button, styles.endButton]}
+                onPress={handleEndCall}
+              >
+                <Ionicons name="call-outline" size={30} color="#fff" />
+              </TouchableOpacity>
+              {!isCallActive && (
+                <TouchableOpacity
+                  style={[styles.button, styles.answerButton]}
+                  onPress={handleAnswer}
+                >
+                  <Ionicons name="call" size={30} color="#fff" />
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
-        </View>
+        )}
       </Animated.View>
     </Modal>
   );
@@ -159,7 +196,44 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#1a1a1a',
   },
-  content: {
+  contactsContainer: {
+    flex: 1,
+    padding: 20,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  contactButton: {
+    flexDirection: 'row',
+    backgroundColor: '#2a2a2a',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 10,
+    alignItems: 'center',
+  },
+  contactInfo: {
+    flex: 1,
+  },
+  contactName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 5,
+  },
+  contactNumber: {
+    fontSize: 14,
+    color: '#ccc',
+    marginBottom: 3,
+  },
+  contactType: {
+    fontSize: 12,
+    color: '#4CAF50',
+  },
+  callScreen: {
     flex: 1,
     justifyContent: 'space-between',
     paddingTop: 60,

@@ -122,20 +122,20 @@ const EmergencyScreen = () => {
                 style={styles.input}
                 placeholder="Name"
                 value={newContact.name}
-                onChangeText={(text) => setNewContact({ ...newContact, name: text })}
+                onChangeText={(text: string) => setNewContact({ ...newContact, name: text })}
               />
               <TextInput
                 style={styles.input}
                 placeholder="Phone Number"
                 value={newContact.phone}
-                onChangeText={(text) => setNewContact({ ...newContact, phone: text })}
+                onChangeText={(text: string) => setNewContact({ ...newContact, phone: text })}
                 keyboardType="phone-pad"
               />
               <TextInput
                 style={styles.input}
                 placeholder="Relationship (optional)"
                 value={newContact.relationship}
-                onChangeText={(text) => setNewContact({ ...newContact, relationship: text })}
+                onChangeText={(text: string) => setNewContact({ ...newContact, relationship: text })}
               />
               <View style={styles.formButtons}>
                 <TouchableOpacity
