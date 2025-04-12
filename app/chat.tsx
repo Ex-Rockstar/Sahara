@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
+
 import {
   View,
   Text,
@@ -8,14 +9,11 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator,
-  Animated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import axios from 'axios';
-import Voice from '@react-native-voice/voice'; // 👈 for speech-to-text
-import AsyncStorage from '@react-native-async-storage/async-storage'; // 👈 for saving chat history
+import Voice from '@react-native-voice/voice';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface Message {
   id: string;
@@ -31,9 +29,9 @@ export default function ChatScreen() {
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const typingDotsAnim = useRef(new Animated.Value(0)).current;
+  const [typingDotCount, setTypingDotCount] = useState(0);
+  const [dotIntervalId, setDotIntervalId] = useState<NodeJS.Timeout | null>(null);
 
-  // Load chat history from AsyncStorage on mount
   useEffect(() => {
     const loadChatHistory = async () => {
       try {
@@ -77,6 +75,21 @@ export default function ChatScreen() {
     }
   };
 
+  const animateTypingDots = () => {
+    const interval = setInterval(() => {
+      setTypingDotCount(prev => (prev + 1) % 4);
+    }, 500);
+    setDotIntervalId(interval);
+  };
+
+  const stopTypingDots = () => {
+    if (dotIntervalId) {
+      clearInterval(dotIntervalId);
+      setDotIntervalId(null);
+      setTypingDotCount(0);
+    }
+  };
+
   const handleSend = async () => {
     if (!inputText.trim()) return;
 
@@ -87,11 +100,8 @@ export default function ChatScreen() {
       timestamp: new Date(),
     };
 
-    setMessages((prevMessages) => {
-      const updatedMessages = [...prevMessages, userMessage];
-      return updatedMessages;
-    });
-
+    const updatedMessages = [...messages, userMessage];
+    setMessages(updatedMessages);
     setInputText('');
     setIsLoading(true);
     animateTypingDots();
@@ -111,13 +121,10 @@ export default function ChatScreen() {
           timestamp: new Date(),
         };
 
-        setMessages((prevMessages) => {
-          const updatedMessages = [...prevMessages, aiMessage];
-          return updatedMessages;
-        });
+        const finalMessages = [...updatedMessages, aiMessage];
+        setMessages(finalMessages);
 
-        // Save the updated history to AsyncStorage
-        await AsyncStorage.setItem('chatHistory', JSON.stringify([...messages, userMessage, aiMessage]));
+        await AsyncStorage.setItem('chatHistory', JSON.stringify(finalMessages));
       } else {
         throw new Error('Invalid response from server');
       }
@@ -130,27 +137,11 @@ export default function ChatScreen() {
         isUser: false,
         timestamp: new Date(),
       };
-      setMessages((prevMessages) => [...prevMessages, errorResponse]);
+      setMessages((prev) => [...prev, errorResponse]);
     } finally {
+      stopTypingDots();
       setIsLoading(false);
     }
-  };
-
-  const animateTypingDots = () => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(typingDotsAnim, {
-          toValue: 3,
-          duration: 1000,
-          useNativeDriver: false,
-        }),
-        Animated.timing(typingDotsAnim, {
-          toValue: 0,
-          duration: 0,
-          useNativeDriver: false,
-        }),
-      ])
-    ).start();
   };
 
   const renderMessage = ({ item }: { item: Message }) => (
@@ -189,16 +180,11 @@ export default function ChatScreen() {
     </View>
   );
 
-  const renderTypingDots = () => {
-    const dots = ['.', '.', '.'];
-    const visibleDots = Math.floor(typingDotsAnim.__getValue());
-
-    return (
-      <Text style={styles.typingText}>
-        AI is typing{dots.slice(0, visibleDots).join('')}
-      </Text>
-    );
-  };
+  const renderTypingDots = () => (
+    <Text style={styles.typingText}>
+      AI is typing{'.'.repeat(typingDotCount)}
+    </Text>
+  );
 
   return (
     <LinearGradient colors={['#F5F5F5', '#FFFFFF']} style={styles.container}>
@@ -217,7 +203,7 @@ export default function ChatScreen() {
         )}
         <View style={styles.inputContainer}>
           <TouchableOpacity onPress={startListening} style={styles.micButton}>
-            <Text style={styles.iconText}>🎤</Text> {/* Wrap the icon in a Text component */}
+            <Text style={styles.iconText}>🎤</Text>
           </TouchableOpacity>
 
           <TextInput
@@ -233,7 +219,7 @@ export default function ChatScreen() {
             onPress={handleSend}
             disabled={!inputText.trim()}
           >
-            <Text style={styles.iconText}>📝</Text> {/* Changed icon */}
+            <Text style={styles.iconText}>📝</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
