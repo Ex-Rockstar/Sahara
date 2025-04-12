@@ -10,7 +10,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
+import FontAwesome from 'react-native-vector-icons/FontAwesome';
 
 interface Affirmation {
   id: string;
@@ -316,7 +316,7 @@ const StarAnimation = () => {
 
   return (
     <Animated.View style={[styles.star, { transform: [{ rotate: spin }] }]}>
-      <Ionicons name="star" size={40} color="#FFA500" />
+      <Text style={styles.starIcon}>★</Text>
     </Animated.View>
   );
 };
@@ -375,14 +375,14 @@ export default function AffirmationsScreen() {
                 onPress={() => setModalVisible(false)}
                 style={styles.closeButton}
               >
-                <Ionicons name="close" size={24} color="#FFA500" />
+                <Text style={styles.closeIcon}>×</Text>
               </TouchableOpacity>
             </View>
 
             <ScrollView style={styles.affirmationsList}>
               {selectedCategory?.affirmations.map((affirmation, index) => (
                 <View key={index} style={styles.affirmationItem}>
-                  <Ionicons name="star" size={20} color="#FFA500" />
+                  <Text style={styles.starIcon}>★</Text>
                   <Text style={styles.affirmationText}>{affirmation}</Text>
                 </View>
               ))}
@@ -513,5 +513,13 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0, 0, 0, 0.3)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
+  },
+  starIcon: {
+    fontSize: 40,
+    color: '#FFA500',
+  },
+  closeIcon: {
+    fontSize: 24,
+    color: '#FFA500',
   },
 }); 
